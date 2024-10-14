@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unidade XXXX</title>
+    <style>
+        /* Estilo geral */
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+        }
+
+        /* Cabeçalho */
+        header {
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-size: 24px;
+            font-weight: bold;
+            padding-left: 20px;
+        }
+
+        /* Estilos para o menu lateral */
+        .menu-lateral {
+            width: 200px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: #333;
+            padding-top: 60px;
+        }
+
+        .menu-lateral a {
+            display: block;
+            color: white;
+            padding: 12px;
+            text-decoration: none;
+            margin: 10px;
+            border-radius: 5px;
+            background-color: #555;
+            text-align: center;
+        }
+
+        .menu-lateral a:hover {
+            background-color: #777;
+        }
+
+        /* Estilo para o conteúdo principal */
+        .content {
+            margin-left: 220px;
+            padding: 20px;
+        }
+
+        /* Estilos Flexbox para as caixas */
+        .container-caixas {
+            display: flex;
+            flex-wrap: wrap; /* Quebra em várias linhas, se necessário */
+            justify-content: flex-start; /* Alinha as caixas à esquerda */
+            gap: 20px; /* Espaço entre as caixas */
+            padding: 20px; /* Espaço interno no contêiner */
+        }
+
+        .caixa {
+            flex: 1 1 200px; /* Largura mínima de 200px, flexível */
+            height: 150px;
+            background-color: #007bff;
+            color: white;
+            display: flex; /* Flexbox para centralizar o conteúdo da caixa */
+            justify-content: center; /* Centraliza horizontalmente */
+            align-items: center; /* Centraliza verticalmente */
+            text-align: center;
+            border-radius: 10px;
+            transition: transform 0.3s ease; /* Efeito suave ao passar o mouse */
+            cursor: pointer; /* Cursor de clique */
+        }
+
+        /* Efeito de hover nas caixas */
+        .caixa:hover {
+            transform: scale(1.05); /* Aumenta levemente a caixa ao passar o mouse */
+        }
+
+        /* Formulários e outros conteúdos */
+        .form-section {
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .form-section input[type="text"], 
+        .form-section input[type="email"], 
+        .form-section textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+
+        .form-section button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .form-section button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Oculta as seções por padrão */
+        section {
+            display: none;
+        }
+
+        /* Classe para mostrar a seção ativa */
+        section.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Cabeçalho -->
+    <header>
+        Unidade XXXX
+    </header>
+
+    <!-- Menu lateral -->
+    <div class="menu-lateral">
+        <a href="#" data-section="inicio">Início</a>
+        <a href="#" data-section="solicitacao">Solicitação de Acesso</a>
+        <a href="#" data-section="membros">Membros Ativos</a>
+        <a href="#" data-section="sugestoes">Sugestões</a>
+        <a href="#" data-section="investigacao">Investigação</a>
+        <a href="#" data-section="c_mulher">CARTÓRIO MULHER</a>
+        <a href="#" data-section="SESP">SESP INTRANET</a>
+    </div>
+
+    <!-- Conteúdo principal -->
+    <div class="content">
+        <!-- Seção inicial com as caixas -->
+        <section id="inicio" class="active">
+            <h2>Página Inicial</h2>
+            <div class="container-caixas">
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/1EtqBRuue7XRBw9DIRWMErMfjmSVyDHVvLZxlR6yjXg0/edit?gid=1793459128#gid=1793459128')">Fluxo 2024</div>
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/1EtqBRuue7XRBw9DIRWMErMfjmSVyDHVvLZxlR6yjXg0/edit?gid=971910205#gid=971910205')">Intimações</div>
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/1EtqBRuue7XRBw9DIRWMErMfjmSVyDHVvLZxlR6yjXg0/edit?gid=1054847718#gid=1054847718')">Ordens de Serviço</div>
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/19Y7MlF7pyET95wlgY4Y3l6-wjYcmrSU2vw2rHQ5Bktg/edit#gid=0')">Cadastro de Relatórios</div>
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/1EtqBRuue7XRBw9DIRWMErMfjmSVyDHVvLZxlR6yjXg0/edit?gid=1124865426#gid=1124865426')">Mandados (MP e MBA)</div>
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/1EtqBRuue7XRBw9DIRWMErMfjmSVyDHVvLZxlR6yjXg0/edit?gid=1874743347#gid=1874743347')">Sobreaviso 2024</div>
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/1EtqBRuue7XRBw9DIRWMErMfjmSVyDHVvLZxlR6yjXg0/edit?gid=1008912795#gid=1008912795')">Apreensões de flagrantes</div>
+                <div class="caixa" onclick="window.open('https://docs.google.com/spreadsheets/d/1EtqBRuue7XRBw9DIRWMErMfjmSVyDHVvLZxlR6yjXg0/edit?gid=439564018#gid=439564018')">Celulares p/ Perícia</div>
+            </div>
+        </section>
+
+        <!-- Seção de solicitação de acesso -->
+        <section id="solicitacao" class="form-section">
+            <h2>Solicitação de Acesso</h2>
+            <form action="mailto:bizer152@gmail.com" method="POST">
+                <label for="email">E-mail:</label>
+                <input type="email" id="email" name="email" placeholder="Digite seu e-mail" required>
+
+                <label for="nome">Nome completo:</label>
+                <input type="text" id="nome" name="nome" placeholder="Digite seu nome completo" required>
+
+                <label for="funcao">Função:</label>
+                <input type="text" id="funcao" name="funcao" placeholder="Digite sua função" required>
+
+                <button type="submit">Enviar</button>
+            </form>
+        </section>
+        
+        <!-- Setor de investigação -->
+        <section id="investigacao" class="form-section">
+            <h2>Investigação</h2>
+            <div class="container-caixas">
+                <div class="caixa" onclick="window.open('https://www.copel.com/externo/public/index.jsf')">Copel</div>
+                <div class="caixa" onclick="window.open('https://siel.tse.jus.br/session/new')">SIEL</div>
+                <div class="caixa" onclick="window.open('http://palmas-saude.ids.inf.br/palmas/')">Saúde Palmas</div>
+                <div class="caixa" onclick="window.open('https://seguranca.sinesp.gov.br/sinesp-seguranca/login.jsf?goto=INFOSEG')">INFOSEG</div>
+                <div class="caixa" onclick="window.open('https://poderjudiciario.sanepar.com.br/#/')">SANEPAR</div>
+                <div class="caixa" onclick="window.open('https://t.me/+3dSJwMidWypkZjNh')">Telegram - DP Palmas</div>
+                <div class="caixa" onclick="window.open('https://consulta5.confirmeonline.com.br/validarLogin/confirmeOnline.xhtml')">Confirme Online</div>
+                <div class="caixa" onclick="window.open('https://t.me/consultasdedadosgratis')">Scrap telegram</div>
+            </div>
+
+        </section>
+        
+        <!-- Cartório -->
+        <section id="c_mulher" class="form-section">
+            <h2>CARTÓRIO MULHER</h2>
+            <div class="container-caixas">
+                <div class="caixa">INTIMAÇÕES</div>
+                <div class="caixa">PROCEDIMENTOS</div>
+                <div class="caixa">VAZIO</div>
+                <div class="caixa">VAZIO</div>
+             
+            </div>
+           
+        </section>
+
+        <section id="SESP" class="form-section">
+            <h2>SESP INTRANET</h2>
+            <div class="container-caixas">
+                <div class="caixa" onclick="window.open('https://sespintranet.sesp.parana/sespintranet/moduloValidacao.do?action=index')">LINK DIRETO</div>
+             
+            </div>
+           
+           
+        </section>
+
+        <!-- Seção de membros ativos -->
+        <section id="membros" class="form-section">
+            <h2>Membros Ativos</h2>
+            <p>Lista de membros ativos na plataforma:</p>
+            <ul>
+                <li>usuario1@exemplo.com</li>
+                <li>usuario2@exemplo.com</li>
+                <li>usuario3@exemplo.com</li>
+            </ul>
+        </section>
+
+        <!-- Seção de sugestões -->
+        <section id="sugestoes" class="form-section">
+            <h2>Sugestões</h2>
+            <form action="mailto:xxxx@gmail.com" method="POST">
+                <label for="sugestao">Digite sua sugestão:</label>
+                <textarea id="sugestao" name="sugestao" rows="4" placeholder="Escreva sua sugestão aqui..." required></textarea>
+
+                <button type="submit">Enviar Sugestão</button>
+            </form>
+        </section>
+    </div>
+
+    <!-- Script para alternar seções -->
+    <script>
+        // Função para alternar entre seções
+        function mostrarSecao(secao) {
+            // Esconde todas as seções
+            const secoes = document.querySelectorAll('section');
+            secoes.forEach(s => s.classList.remove('active'));
+
+            // Mostra apenas a seção clicada
+            const secaoAtiva = document.getElementById(secao);
+            if (secaoAtiva) {
+                secaoAtiva.classList.add('active');
+            }
+        }
+
+        // Adiciona evento de clique em todos os links do menu lateral
+        const links = document.querySelectorAll('.menu-lateral a');
+        links.forEach(link => {
+            link.addEventListener('click', function(event) {
+                event.preventDefault(); // Evita comportamento padrão do link
+                const secao = this.getAttribute('data-section');
+                mostrarSecao(secao);
+            });
+        });
+
+        // Mostra a primeira seção ao carregar a página
+        mostrarSecao('inicio');
+    </script>
+
+</body>
+</html>
