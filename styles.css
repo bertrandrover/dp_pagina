@@ -379,6 +379,94 @@ body {
     color: #92400e;
 }
 
+/* Efeito Hover Suave no Calendário */
+.fc-daygrid-day {
+    transition: all 0.2s ease-in-out;
+    cursor: pointer !important;
+}
+
+.fc-daygrid-day:hover {
+    background-color: #f8fafc !important;
+    transform: scale(1.02);
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.fc-daygrid-day.day-busy:hover {
+    background-color: #fffbeb !important;
+    filter: brightness(0.98);
+}
+
+.fc-daygrid-day.day-full:hover {
+    background-color: #fef2f2 !important;
+    filter: brightness(0.98);
+}
+
+/* Efeito Pulsante para o Dia de Hoje */
+.fc-day-today {
+    position: relative;
+    background-color: #eff6ff !important;
+    z-index: 1;
+}
+
+.fc-day-today::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid #3b82f6;
+    animation: pulse-border 2s infinite;
+    pointer-events: none;
+}
+
+@keyframes pulse-border {
+    0% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+}
+
+/* TEMA TÁTICO "GUNMETAL" (Acinzentado) */
+body { background-color: #f8fafc; }
+
+.bg-indigo-900 {
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%) !important;
+    border-bottom: 3px solid #d97706;
+}
+
+.bg-indigo-600, button.bg-indigo-900 {
+    background-color: #475569 !important;
+    border: 1px solid #64748b;
+}
+
+.bg-indigo-600:hover {
+    background-color: #334155 !important;
+}
+
+.text-indigo-900 { color: #1e293b !important; }
+.text-indigo-200 { color: #cbd5e1 !important; }
+.text-indigo-600, .fa-search.text-indigo-300 { color: #d97706 !important; }
+
+#global-search {
+    background-color: rgba(30, 41, 59, 0.6) !important;
+    border-color: #475569 !important;
+}
+
+/* Destaque (HIGHLIGHT) */
+.highlight-term {
+    background-color: #fef9c3;
+    color: #854d0e;
+    font-weight: 800;
+    padding: 0 2px;
+    border-radius: 2px;
+    border-bottom: 2px solid #ca8a04;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
 /* Responsividade */
 @media (max-width: 768px) {
     .modal-container {
@@ -394,27 +482,55 @@ body {
         font-size: 1.25rem;
     }
 }
-/* Efeito Hover Suave no Calendário */
-.fc-daygrid-day {
-    transition: all 0.2s ease-in-out;
-    cursor: pointer;
+
+/* Popover das Micro-Opções */
+#day-popover {
+    z-index: 99999 !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    transition: opacity 200ms ease, transform 200ms ease;
 }
 
-/* Quando passar o mouse: levemente mais escuro e aumenta o tamanho (zoom sutil) */
-.fc-daygrid-day:hover {
-    background-color: #f8fafc !important; /* Slate-50 */
-    transform: scale(1.02); 
-    z-index: 10; /* Fica acima dos vizinhos */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border-radius: 8px; /* Arredonda as bordas ao focar */
+/* Scrollbar personalizada */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
 }
 
-/* Mantém a cor original se já tiver status (vermelho/amarelo), mas aplica o zoom */
-.fc-daygrid-day.day-busy:hover {
-    background-color: #fffbeb !important; /* Mantém amarelo */
-    filter: brightness(0.98);
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
 }
-.fc-daygrid-day.day-full:hover {
-    background-color: #fef2f2 !important; /* Mantém vermelho */
-    filter: brightness(0.98);
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Animações */
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+/* Utilitários */
+.page-content {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Para garantir que os dias do calendário sejam clicáveis */
+.fc-daygrid-day-frame {
+    cursor: pointer !important;
 }

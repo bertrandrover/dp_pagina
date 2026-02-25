@@ -1,69 +1,81 @@
 // =======================================================
-// OITIVASPRO - SISTEMA DE GESTÃO (Versão Otimizada)
+// OITIVASPRO - SISTEMA DE GESTÃO (VERSÃO MULTI-UNIDADES)
 // =======================================================
 
-/// --- VARIÁVEIS GLOBAIS ---
+// --- VARIÁVEIS GLOBAIS ---
 let hearings = [];
 let calendar = null;
-// OBS: A variável 'currentTenant' já vem do firebase-config.js, não declare ela aqui!
+let currentUserEmail = null;
 
-// --- INICIALIZAÇÃO ---
+// =======================================================
+// 1. INICIALIZAÇÃO
+// =======================================================
 document.addEventListener('DOMContentLoaded', () => {
     initAuth();
+    
+    // Configura botões de busca
+    const btnClear = document.getElementById('btn-clear-search');
+    if(btnClear) btnClear.addEventListener('click', clearSearch);
+    
+    // Inicializa listeners para o popover
+    initPopoverListeners();
 });
 
-// --- AUTENTICAÇÃO ---
+// =======================================================
+// 2. AUTENTICAÇÃO E LOGIN
+// =======================================================
 function initAuth() {
-    // Monitora se o usuário está logado ou não
     auth.onAuthStateChanged(async (user) => {
         if (user) {
-            currentTenant = user.uid;
+            // Salva o email do usuário
+            currentUserEmail = user.email;
             
-            // Verifica se é Admin (lógica mantida do seu arquivo original)
-            if (user.email === 'admin@oitivaspro.com') {
-                showToast('Modo Admin Ativado', 'success');
-                // Se tiver função específica de admin, chamaria aqui
-            }
+            // Converte o email para um ID seguro para usar no Firebase
+            currentUnit = getUnitIdFromEmail(user.email);
             
-            await initApp(); // Carrega o sistema
-            showLoginScreen(false); // Esconde login e mostra App
+            console.log(`Usuário logado: ${user.email}`);
+            console.log(`Unidade: ${currentUnit}`);
+            
+            // Mostra qual unidade está acessando
+            showToast(`Acessando: ${user.email}`, 'success');
+            
+            // Inicializa o app com os dados DESTA unidade
+            await initApp();
+            
+            // Esconde a tela de login
+            showLoginScreen(false);
         } else {
-            showLoginScreen(true); // Mostra login e esconde App
+            // Usuário não logado
+            currentUnit = null;
+            currentUserEmail = null;
+            showLoginScreen(true);
         }
     });
 
-    // Listener do Formulário de Login
     const loginForm = document.getElementById('form-login');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const email = document.getElementById('login-email').value;
             const pass = document.getElementById('login-pass').value;
             const btn = e.target.querySelector('button');
             const originalText = btn.innerHTML;
 
             try {
-                // Feedback visual de carregamento
                 btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Entrando...';
                 btn.disabled = true;
                 
-                // Define persistência de sessão (fecha aba = desloga)
                 await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
                 await auth.signInWithEmailAndPassword(email, pass);
                 
-                // O onAuthStateChanged lá em cima vai assumir a partir daqui
-            } catch (error) {
-                console.error("Erro no Login:", error);
+                // O onAuthStateChanged vai cuidar do resto!
                 
-                let msg = 'Erro ao entrar. Verifique suas credenciais.';
-                if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-                    msg = 'E-mail ou senha incorretos.';
-                } else if (error.code === 'auth/user-not-found') {
-                    msg = 'Usuário não cadastrado.';
-                } else if (error.code === 'auth/too-many-requests') {
-                    msg = 'Muitas tentativas. Aguarde um pouco.';
-                }
+            } catch (error) {
+                console.error(error);
+                let msg = 'Erro ao entrar. Verifique credenciais.';
+                if (error.code === 'auth/invalid-credential') msg = 'E-mail ou senha incorretos.';
+                if (error.code === 'auth/user-not-found') msg = 'Usuário não encontrado.';
+                if (error.code === 'auth/wrong-password') msg = 'Senha incorreta.';
                 
                 showToast(msg, 'error');
                 btn.innerHTML = originalText;
@@ -73,141 +85,247 @@ function initAuth() {
     }
 }
 
-// --- CORE DA APLICAÇÃO ---
-async function initApp() {
-    console.log("Iniciando carregamento do sistema...");
+// =======================================================
+// 3. FUNÇÕES DE LOGOUT
+// =======================================================
+window.logout = async function() {
     try {
-        // 1. Carrega dados do Firebase
+        await auth.signOut();
+        currentUnit = null;
+        currentUserEmail = null;
+        hearings = [];
+        showToast('Desconectado com sucesso!', 'success');
+    } catch (error) {
+        showToast('Erro ao sair', 'error');
+    }
+}
+
+// =======================================================
+// 4. CORE DA APLICAÇÃO
+// =======================================================
+async function initApp() {
+    console.log(`Iniciando sistema para unidade: ${currentUnit}`);
+    try {
         await loadHearings();
         
-        // 2. Renderiza a lista de oitivas (Relatórios)
-        renderHearingsPage();
+        // Atualiza o título com o email da unidade
+        updateUnitHeader();
         
-        // 3. Renderiza o Calendário (com pequeno delay para o HTML estar pronto)
+        // Adiciona botão de logout
+        addLogoutButton();
+        
+        renderHearingsPage();
         setTimeout(() => {
             renderCalendar();
-            updateTodayStats(); // Atualiza card de hoje
-        }, 100);
-
+        }, 200);
     } catch (error) {
-        console.error("Erro fatal na inicialização:", error);
-        showToast("Erro ao carregar alguns dados.", "warning");
+        console.error("Erro fatal:", error);
+        showToast("Erro ao carregar dados.", "error");
     }
 }
 
-// --- LÓGICA DE BUSCA GLOBAL ---
-document.getElementById('global-search').addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase().trim();
-    
-    // Se o campo estiver vazio, mostra tudo normal
-    if (term === '') {
-        renderHearingsPage(hearings); // Passa a lista completa
-        // Se quiser, pode esconder a seção de relatórios se ela estiver oculta por padrão
-        // document.getElementById('hearings-view').classList.add('hidden'); 
-        return;
+function updateUnitHeader() {
+    const headerTitle = document.querySelector('.bg-indigo-900 .text-2xl.font-bold');
+    if (headerTitle && currentUserEmail) {
+        // Extrai o nome antes do @ para mostrar
+        const unitName = currentUserEmail.split('@')[0];
+        headerTitle.innerHTML = `📋 ${unitName}`;
     }
+}
 
-    // Filtra a lista global
-    const filtered = hearings.filter(h => 
-        (h.name && h.name.toLowerCase().includes(term)) ||
-        (h.proc && h.proc.toLowerCase().includes(term)) ||
-        (h.phone && h.phone.includes(term)) ||
-        (h.delegate && h.delegate.toLowerCase().includes(term))
-    );
+function addLogoutButton() {
+    const header = document.querySelector('.bg-indigo-900 .flex');
+    if (header && !document.getElementById('logout-btn-header')) {
+        const logoutBtn = document.createElement('button');
+        logoutBtn.id = 'logout-btn-header';
+        logoutBtn.onclick = logout;
+        logoutBtn.className = 'ml-auto flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold py-2 px-4 rounded-xl transition-all';
+        logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Sair';
+        
+        header.appendChild(logoutBtn);
+    }
+}
 
-    // Garante que a seção de relatórios esteja visível para mostrar o resultado
-    const reportsSection = document.getElementById('hearings-view');
-    if(reportsSection) reportsSection.classList.remove('hidden');
-
-    // Renderiza apenas os filtrados
-    renderHearingsPage(filtered);
-});
-
-// --- CARREGAMENTO DE DADOS (FIREBASE) ---
 async function loadHearings() {
     try {
-        // Busca na referência do usuário atual
-        const snapshot = await getTenantRef('hearings').once('value');
-        hearings = []; // Limpa array local
+        // Usa getUnitRef para carregar SÓ os dados desta unidade
+        const snap = await getUnitRef('hearings').once('value');
+        hearings = [];
         
-        snapshot.forEach(child => {
-            hearings.push({ id: child.key, ...child.val() });
-        });
+        if(snap.exists()){
+            snap.forEach(child => {
+                hearings.push({ id: child.key, ...child.val() });
+            });
+        }
         
-        console.log(`${hearings.length} oitivas carregadas.`);
-    } catch (e) { 
-        console.error("Erro ao baixar oitivas:", e); 
-        hearings = []; 
+        console.log(`Carregadas ${hearings.length} oitivas para ${currentUnit}`);
+        
+    } catch (e) {
+        console.error("Erro ao ler banco:", e);
+        hearings = [];
     }
 }
 
-// --- CALENDÁRIO (LÓGICA VISUAL) ---
-// --- CALENDÁRIO ATUALIZADO (Versão 2.0) ---
+// =======================================================
+// 5. CALENDÁRIO & POPOVER
+// =======================================================
 function renderCalendar() {
     const calendarEl = document.getElementById('calendar');
-    const titleEl = document.getElementById('calendar-title'); // Elemento do título
+    const titleEl = document.getElementById('calendar-title');
     
-    if (!calendarEl) return;
-    if (calendar) calendar.destroy();
+    if (!calendarEl) {
+        console.error('Elemento do calendário não encontrado!');
+        return;
+    }
+    
+    if (calendar) {
+        calendar.destroy();
+    }
 
+    // Contagem para cores
     const counts = {};
-    hearings.forEach(h => {
-        if (h.date) counts[h.date] = (counts[h.date] || 0) + 1;
+    hearings.forEach(h => { 
+        if (h.date) counts[h.date] = (counts[h.date] || 0) + 1; 
     });
 
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         locale: 'pt-br',
-        headerToolbar: false, // Desligamos o padrão para usar o nosso customizado
+        headerToolbar: false,
         height: 'auto',
         
-        // Eventos invisíveis (apenas para lógica)
-        events: hearings.map(h => ({
-            start: h.date,
-            display: 'background',
-            className: 'invisible'
-        })),
-
-        // 1. ATUALIZAÇÃO DO TÍTULO E LISTA LATERAL (O Pulo do Gato!)
         datesSet: function(info) {
-            // Atualiza o texto do título (ex: "Fevereiro de 2026")
             if(titleEl) {
-                // Pega o título nativo do FullCalendar que já vem traduzido
-                titleEl.innerText = info.view.title; 
+                titleEl.innerText = info.view.title.charAt(0).toUpperCase() + info.view.title.slice(1);
             }
-            
-            // Chama a função para preencher a lista lateral com as datas visíveis
             updateSideList(info.start, info.end);
         },
 
-        // Pintura das Células (Igual anterior)
         dayCellDidMount: function(info) {
             const dateStr = info.date.toISOString().split('T')[0];
             const count = counts[dateStr] || 0;
             const cell = info.el;
-            cell.style.backgroundColor = '';
             
+            cell.style.backgroundColor = '';
+            cell.classList.remove('day-busy', 'day-full');
+
             if (count >= 8) {
-                cell.style.backgroundColor = '#fef2f2'; 
+                cell.style.backgroundColor = '#fef2f2';
                 cell.classList.add('day-full');
             } else if (count > 0) {
-                cell.style.backgroundColor = '#fffbeb'; 
+                cell.style.backgroundColor = '#fffbeb';
                 cell.classList.add('day-busy');
             }
+            
+            // Adiciona atributo de data para facilitar o clique
+            cell.setAttribute('data-date', dateStr);
         },
 
-        // Clique no dia (Popover)
         dateClick: function(info) {
+            if (info.jsEvent) {
+                info.jsEvent.preventDefault();
+                info.jsEvent.stopPropagation();
+            }
             openDayPopover(info.dateStr, info.jsEvent);
         }
     });
 
     calendar.render();
+    
+    // Atualiza título inicial
+    if (titleEl) {
+        titleEl.innerText = calendar.view.title.charAt(0).toUpperCase() + calendar.view.title.slice(1);
+    }
+    
+    // Atualiza lista lateral
+    updateSideList(calendar.view.activeStart, calendar.view.activeEnd);
 }
 
-// =======================================================
-// LÓGICA DO POPOVER (MENU FLUTUANTE DE DIA)
-// =======================================================
+function initPopoverListeners() {
+    // Fecha popover ao clicar fora
+    document.addEventListener('click', function(e) {
+        const popover = document.getElementById('day-popover');
+        
+        if (popover && !popover.classList.contains('hidden')) {
+            // Se o clique NÃO foi no popover E NÃO foi em um dia do calendário
+            const clickedOnPopover = popover.contains(e.target);
+            const clickedOnCalendarDay = e.target.closest('.fc-daygrid-day');
+            
+            if (!clickedOnPopover && !clickedOnCalendarDay) {
+                closePopover();
+            }
+        }
+    });
+    
+    // Previne que cliques dentro do popover fechem ele
+    const popoverElement = document.getElementById('day-popover');
+    if (popoverElement) {
+        popoverElement.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+}
+
+function updateSideList(startDate, endDate) {
+    const listEl = document.getElementById('month-list');
+    if(!listEl) return;
+    listEl.innerHTML = '';
+
+    const visible = hearings.filter(h => {
+        if(!h.date) return false;
+        const d = new Date(h.date + 'T00:00:00');
+        return d >= startDate && d < endDate;
+    }).sort((a,b) => {
+        const timeA = a.time || '00:00';
+        const timeB = b.time || '00:00';
+        return new Date(a.date+'T'+timeA) - new Date(b.date+'T'+timeB);
+    });
+
+    if (visible.length === 0) {
+        listEl.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">Sem agendamentos.</div>`;
+        return;
+    }
+
+    visible.forEach(h => {
+        const [year, month, day] = h.date.split('-');
+        const dObj = new Date(year, month - 1, day);
+        
+        const dayNum = dObj.getDate();
+        const monthName = dObj.toLocaleDateString('pt-BR', { month: 'short' }).replace('.','');
+        
+        const isDone = h.status === 'realizada';
+        const opacityClass = isDone ? 'opacity-60 grayscale' : '';
+        const iconStatus = isDone ? '<i class="fas fa-check-circle text-emerald-500 ml-2"></i>' : '';
+        
+        let border = 'border-slate-400';
+        if(h.type === 'Investigado') border = 'border-rose-500';
+        if(h.type === 'Vítima') border = 'border-amber-500';
+        if(isDone) border = 'border-emerald-500';
+
+        const item = document.createElement('div');
+        item.className = `bg-white p-3 rounded-xl border-l-4 ${border} shadow-sm hover:shadow-md transition-all border-y border-r border-slate-50 cursor-pointer group mb-2 ${opacityClass}`;
+        item.onclick = () => editHearing(h.id);
+
+        item.innerHTML = `
+            <div class="flex items-start gap-3">
+                <div class="flex flex-col items-center justify-center bg-slate-50 min-w-[3rem] py-2 rounded-lg border border-slate-100">
+                    <span class="text-lg font-bold text-slate-700 leading-none">${dayNum}</span>
+                    <span class="text-[10px] uppercase font-bold text-slate-400 mt-1">${monthName}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between">
+                        <h4 class="font-bold text-slate-800 text-sm truncate pr-2 flex items-center">
+                            ${h.name} ${iconStatus}
+                        </h4>
+                        <span class="text-[10px] bg-slate-100 text-slate-500 px-1 rounded">${h.time}</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-1 truncate">${h.proc || 'S/N'}</div>
+                </div>
+            </div>
+        `;
+        listEl.appendChild(item);
+    });
+}
 
 function openDayPopover(dateStr, jsEvent) {
     const popover = document.getElementById('day-popover');
@@ -216,22 +334,30 @@ function openDayPopover(dateStr, jsEvent) {
     const emptyState = document.getElementById('popover-empty');
     const btnAdd = document.getElementById('btn-add-on-date');
     
-    if(!popover) return;
+    if(!popover) {
+        console.error('Popover não encontrado!');
+        return;
+    }
 
-    // 1. Configura Data e Botão
-    const dataFormatada = new Date(dateStr).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
-    title.innerText = dataFormatada;
+    const [year, month, day] = dateStr.split('-');
+    const localDate = new Date(year, month - 1, day);
     
-    // Configura o botão para abrir modal já com a data
+    const dataFormatada = localDate.toLocaleDateString('pt-BR', { 
+        weekday: 'long', 
+        day: 'numeric', 
+        month: 'long' 
+    });
+    
+    title.innerText = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
+    
     btnAdd.onclick = () => {
         closePopover();
         openNewHearingModal(dateStr);
     };
 
-    // 2. Filtra Oitivas APENAS do dia clicado
-    const dailyHearings = hearings.filter(h => h.date === dateStr).sort((a,b) => a.time.localeCompare(b.time));
+    const dailyHearings = hearings.filter(h => h.date === dateStr)
+        .sort((a,b) => (a.time || '00:00').localeCompare(b.time || '00:00'));
     
-    // 3. Monta a Microlista
     list.innerHTML = '';
     if (dailyHearings.length === 0) {
         emptyState.classList.remove('hidden');
@@ -240,43 +366,49 @@ function openDayPopover(dateStr, jsEvent) {
         dailyHearings.forEach(h => {
             const item = document.createElement('div');
             item.className = 'flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-slate-100 group';
-            item.onclick = () => { editHearing(h.id); closePopover(); };
+            item.onclick = () => { 
+                editHearing(h.id); 
+                closePopover(); 
+            };
+            
+            const isDone = h.status === 'realizada';
+            const doneIcon = isDone ? '<i class="fas fa-check-circle text-emerald-500 ml-1 text-xs"></i>' : '';
             
             item.innerHTML = `
                 <div class="flex items-center gap-3">
-                    <span class="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-indigo-100">${h.time}</span>
+                    <span class="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-indigo-100">
+                        ${h.time || '--:--'}
+                    </span>
                     <div class="leading-tight">
-                        <div class="text-xs font-bold text-slate-700">${h.name}</div>
-                        <div class="text-[10px] text-slate-400">${h.type}</div>
+                        <div class="text-xs font-bold text-slate-700 flex items-center">
+                            ${h.name || 'Sem nome'} ${doneIcon}
+                        </div>
+                        <div class="text-[10px] text-slate-400">${h.type || 'Sem tipo'}</div>
                     </div>
                 </div>
-                <i class="fas fa-chevron-right text-[10px] text-slate-300 opacity-0 group-hover:opacity-100"></i>
+                <i class="fas fa-chevron-right text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"></i>
             `;
             list.appendChild(item);
         });
     }
 
-    // 4. Posicionamento Inteligente (Mouse)
-    // Evita que o popover saia da tela se clicar muito à direita ou embaixo
-    const rect = jsEvent.target.getBoundingClientRect();
-    const x = jsEvent.clientX;
-    const y = jsEvent.clientY;
-    
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
     
-    let left = x + 10;
-    let top = y - 50;
+    let left = jsEvent.clientX + 10;
+    let top = jsEvent.clientY + 10;
     
-    // Se estiver muito à direita, joga para esquerda
-    if (x > screenW - 350) left = x - 330;
-    // Se estiver muito embaixo, joga para cima
-    if (y > screenH - 300) top = y - 250;
+    if (left + 320 > screenW) {
+        left = jsEvent.clientX - 330;
+    }
+    
+    if (top + 200 > screenH) {
+        top = jsEvent.clientY - 210;
+    }
 
     popover.style.left = `${left}px`;
     popover.style.top = `${top}px`;
 
-    // 5. Exibe com animação
     popover.classList.remove('hidden');
     setTimeout(() => {
         popover.classList.remove('opacity-0', 'scale-95');
@@ -293,212 +425,193 @@ function closePopover() {
     setTimeout(() => popover.classList.add('hidden'), 200);
 }
 
-// Fecha ao clicar fora
-document.addEventListener('click', (e) => {
-    const popover = document.getElementById('day-popover');
-    // Se o clique NÃO foi no popover E NÃO foi num dia do calendário
-    if (popover && !popover.classList.contains('hidden')) {
-        if (!e.target.closest('#day-popover') && !e.target.closest('.fc-daygrid-day')) {
-            closePopover();
+// =======================================================
+// 6. BUSCA GLOBAL INTELIGENTE
+// =======================================================
+const searchInput = document.getElementById('global-search');
+const searchDropdown = document.getElementById('search-dropdown');
+const suggestionsList = document.getElementById('search-suggestions-list');
+const btnClear = document.getElementById('btn-clear-search');
+
+if(searchInput) {
+    searchInput.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase().trim();
+        if(term.length > 0) btnClear.classList.remove('hidden');
+        else btnClear.classList.add('hidden');
+
+        if (term.length < 2) {
+            searchDropdown.classList.add('hidden');
+            if (term.length === 0) renderHearingsPage(hearings);
+            return;
         }
-    }
-});
 
-/// --- FUNÇÃO DA LISTA LATERAL (DIREITA) ---
-function updateSideList(startDate, endDate) {
-    const listEl = document.getElementById('month-list');
-    if(!listEl) return;
-
-    listEl.innerHTML = '';
-
-    // Filtra oitivas que estão dentro do intervalo visualizado no calendário
-    const visibleHearings = hearings.filter(h => {
-        const hDate = new Date(h.date + 'T00:00:00'); // Garante hora zerada para comparar
-        return hDate >= startDate && hDate < endDate;
+        const matches = hearings.filter(h => filterHearing(h, term));
+        renderSuggestions(matches, term);
+        renderHearingsPage(matches, term);
     });
 
-    // Ordena por data e hora
-    visibleHearings.sort((a, b) => {
-        return new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time);
-    });
-
-    if (visibleHearings.length === 0) {
-        listEl.innerHTML = `
-            <div class="flex flex-col items-center justify-center h-48 text-slate-400 opacity-60">
-                <i class="far fa-calendar-times text-4xl mb-3"></i>
-                <p class="text-sm font-medium">Sem agendamentos neste mês.</p>
-            </div>
-        `;
-        return;
-    }
-
-    // Gera o HTML Minimalista e Elegante
-    visibleHearings.forEach(h => {
-        // Formata data (ex: 12 Fev)
-        const day = new Date(h.date).getDate();
-        const monthShort = new Date(h.date).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
-        
-        // Define cor da borda lateral baseada no tipo
-        let borderClass = 'border-indigo-500'; // Padrão
-        if(h.type === 'Investigado') borderClass = 'border-rose-500';
-        if(h.type === 'Vítima') borderClass = 'border-amber-500';
-
-        const item = document.createElement('div');
-        item.className = `bg-white p-3 rounded-xl border-l-4 ${borderClass} shadow-sm hover:shadow-md transition-all border-y border-r border-slate-50 cursor-pointer group`;
-        item.onclick = () => editHearing(h.id); // Clicar abre edição
-
-        item.innerHTML = `
-            <div class="flex items-start gap-3">
-                <div class="flex flex-col items-center justify-center bg-slate-50 min-w-[3.5rem] py-2 rounded-lg border border-slate-100">
-                    <span class="text-xl font-bold text-slate-700 leading-none">${day}</span>
-                    <span class="text-[10px] uppercase font-bold text-slate-400 leading-none mt-1">${monthShort}</span>
-                </div>
-
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-start">
-                        <h4 class="font-bold text-slate-800 text-sm truncate pr-2">${h.name}</h4>
-                        <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono">${h.time}</span>
-                    </div>
-                    
-                    <div class="text-xs text-slate-500 mt-1 truncate">
-                        <i class="fas fa-folder text-slate-300 mr-1"></i> ${h.proc || 'S/N'}
-                    </div>
-                    
-                    <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                        <i class="fas fa-user-shield text-[9px]"></i> 
-                        <span class="truncate">${h.delegate || 'Sem delegado'}</span>
-                    </div>
-                </div>
-                
-                <div class="self-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <i class="fas fa-chevron-right text-slate-300"></i>
-                </div>
-            </div>
-        `;
-        listEl.appendChild(item);
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            searchDropdown.classList.add('hidden');
+            const term = e.target.value.toLowerCase().trim();
+            const matches = hearings.filter(h => filterHearing(h, term));
+            renderHearingsPage(matches, term);
+            
+            const reports = document.getElementById('hearings-view');
+            if(reports) {
+                reports.classList.remove('hidden');
+                reports.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
     });
 }
 
-function closePopover() {
-    const popover = document.getElementById('day-popover');
-    if(!popover) return;
-    
-    popover.classList.remove('opacity-100', 'scale-100');
-    popover.classList.add('opacity-0', 'scale-95');
-    
-    setTimeout(() => {
-        popover.classList.add('hidden');
-    }, 200); // Espera animação acabar
+function forceSearch() {
+    const term = searchInput.value.toLowerCase().trim();
+    const matches = hearings.filter(h => filterHearing(h, term));
+    renderHearingsPage(matches, term);
+    const reports = document.getElementById('hearings-view');
+    if(reports) {
+        reports.classList.remove('hidden');
+        reports.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
-// Fecha o popover se clicar fora dele
-document.addEventListener('click', (e) => {
-    const popover = document.getElementById('day-popover');
-    // Verifica se o clique NÃO foi dentro do popover e NÃO foi numa célula do calendário
-    if (popover && !popover.classList.contains('hidden') && !e.target.closest('#day-popover') && !e.target.closest('.fc-daygrid-day')) {
-        closePopover();
-    }
-});
+function filterHearing(h, term) {
+    const cleanTerm = term.replace(/[^a-z0-9]/g, '');
+    const name = (h.name || '').toLowerCase();
+    const proc = (h.proc || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const phone = (h.phone || '').replace(/[^0-9]/g, '');
+    const del = (h.delegate || '').toLowerCase();
+    return name.includes(term) || proc.includes(cleanTerm) || phone.includes(cleanTerm) || del.includes(term);
+}
 
-// --- UI: RELATÓRIOS E LISTAS ---
-// --- UI: RELATÓRIOS (Atualizada com Ordem Correta) ---
-// Agora aceita um argumento 'dataset'. Se não for passado, usa 'hearings' global.
-function renderHearingsPage(dataset = null) {
+function renderSuggestions(matches, term) {
+    suggestionsList.innerHTML = '';
+    if (matches.length === 0) {
+        suggestionsList.innerHTML = `<div class="p-4 text-center text-slate-400 text-sm">Nada encontrado.</div>`;
+    } else {
+        matches.slice(0, 5).forEach(h => {
+            const div = document.createElement('div');
+            div.className = 'p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 transition-colors';
+            div.onclick = () => {
+                searchInput.value = h.name;
+                searchDropdown.classList.add('hidden');
+                renderHearingsPage([h], h.name.toLowerCase());
+                const reports = document.getElementById('hearings-view');
+                if(reports) {
+                    reports.classList.remove('hidden');
+                    reports.scrollIntoView({ behavior: 'smooth' });
+                }
+            };
+            
+            const isDone = h.status === 'realizada';
+            const icon = isDone ? '<i class="fas fa-check-circle text-emerald-500 ml-1"></i>' : '';
+            
+            div.innerHTML = `
+                <div class="flex justify-between">
+                    <div class="font-bold text-slate-700 text-sm">${highlightText(h.name, term)} ${icon}</div>
+                    <span class="text-[10px] text-slate-400">${new Date(h.date).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div class="text-[10px] text-slate-400">${h.proc ? 'IP: '+highlightText(h.proc, term) : 'Sem IP'}</div>
+            `;
+            suggestionsList.appendChild(div);
+        });
+    }
+    searchDropdown.classList.remove('hidden');
+}
+
+function clearSearch() {
+    searchInput.value = '';
+    searchDropdown.classList.add('hidden');
+    renderHearingsPage(hearings);
+    btnClear.classList.add('hidden');
+}
+
+function highlightText(text, term) {
+    if (!text || !term) return text || '';
+    const safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${safeTerm})`, 'gi');
+    return text.toString().replace(regex, '<span class="highlight-term">$1</span>');
+}
+
+// =======================================================
+// 7. RELATÓRIOS (ACCORDION)
+// =======================================================
+function renderHearingsPage(dataset = null, searchTerm = '') {
     const dataToRender = dataset || hearings;
+    
+    const parentSection = document.getElementById('hearings-view');
     const container = document.getElementById('reports-container');
     
     if (!container) return;
+    if (parentSection) parentSection.classList.remove('hidden');
 
     container.innerHTML = '';
-    
+
     if (dataToRender.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                <p>Nenhum registro encontrado.</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">Nenhum registro encontrado.</div>`;
         return;
     }
 
     const groups = {};
-    
-    // Agrupa por Mês (YYYY-MM)
     dataToRender.forEach(h => {
+        if(!h.date) return;
         const key = h.date.substring(0, 7);
         if (!groups[key]) groups[key] = [];
         groups[key].push(h);
     });
 
-    // ORDENAÇÃO DOS GRUPOS (MESES)
-    // Antes estava .reverse(), agora tiramos para ficar Crescente (Fev -> Mar -> Abr)
-    const sortedKeys = Object.keys(groups).sort(); 
-
-    sortedKeys.forEach((key, idx) => {
+    Object.keys(groups).sort().forEach((key, idx) => {
         const [year, month] = key.split('-');
         const nomeMes = new Date(year, month - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
         const nomeMesCap = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
         
-        // Se for uma busca (dataset passado), abre todos os accordions para facilitar
-        // Se for carregamento normal, abre só o primeiro (mês atual/próximo)
-        const isOpen = (dataset !== null && dataset !== hearings) || idx === 0 ? 'open' : '';
-
-        // Ordena as oitivas DENTRO do mês (Data mais próxima primeiro)
-        const monthHearings = groups[key].sort((a,b) => {
-            return new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time);
+        const isOpen = (searchTerm || idx === 0) ? 'open' : '';
+        const border = searchTerm ? 'border-l-4 border-l-amber-500' : 'border border-slate-200';
+        
+        const list = groups[key].sort((a,b) => {
+            const timeA = a.time || '00:00';
+            const timeB = b.time || '00:00';
+            return new Date(a.date+'T'+timeA) - new Date(b.date+'T'+timeB);
         });
 
         const html = `
-            <details class="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4" ${isOpen}>
-                <summary class="flex justify-between items-center p-4 cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors select-none">
-                    <div class="flex items-center gap-3">
-                        <i class="far fa-calendar-check text-indigo-500"></i>
-                        <span class="font-bold text-slate-700 text-lg capitalize">${nomeMesCap}</span>
-                    </div>
-                    <span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-full">
-                        ${monthHearings.length} registros
-                    </span>
+            <details class="group bg-white rounded-xl shadow-sm ${border} overflow-hidden mb-4" ${isOpen}>
+                <summary class="flex justify-between items-center p-4 cursor-pointer bg-slate-50 hover:bg-slate-100 select-none">
+                    <span class="font-bold text-slate-700 text-lg capitalize">${nomeMesCap}</span>
+                    <span class="bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-full">${list.length}</span>
                 </summary>
-                
                 <div class="p-0 border-t border-slate-100">
                     <table class="w-full text-sm text-left">
-                        <thead class="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
-                            <tr>
-                                <th class="px-4 py-3">Data</th>
-                                <th class="px-4 py-3">Envolvido</th>
-                                <th class="px-4 py-3 hidden md:table-cell">Procedimento</th>
-                                <th class="px-4 py-3">Condição</th>
-                                <th class="px-4 py-3 text-right">Ações</th>
-                            </tr>
-                        </thead>
                         <tbody class="divide-y divide-slate-100">
-                            ${monthHearings.map(h => `
-                                <tr class="hover:bg-slate-50 transition-colors">
+                            ${list.map(h => {
+                                const isDone = h.status === 'realizada';
+                                const rowOpacity = isDone ? 'opacity-50 bg-slate-50' : 'hover:bg-slate-50';
+                                const iconDone = isDone ? '<i class="fas fa-check-circle text-emerald-500 ml-2" title="Realizada"></i>' : '';
+                                const textDecoration = isDone ? 'line-through text-slate-400' : 'text-slate-700';
+                                
+                                return `
+                                <tr class="${rowOpacity} transition-colors">
                                     <td class="px-4 py-3 whitespace-nowrap">
-                                        <div class="font-medium text-slate-800">${new Date(h.date).toLocaleDateString('pt-BR')}</div>
-                                        <div class="text-xs text-slate-500 bg-slate-100 inline-block px-1 rounded">${h.time}</div>
+                                        <div class="font-bold text-slate-800">${new Date(h.date).toLocaleDateString('pt-BR')}</div>
+                                        <div class="text-xs text-slate-500">${h.time}</div>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <div class="font-bold text-slate-700">${h.name}</div>
-                                        <div class="text-xs text-slate-500 flex items-center gap-1">
-                                            ${h.phone ? `<i class="fab fa-whatsapp text-green-500"></i> ${h.phone}` : ''}
-                                        </div>
+                                        <div class="font-bold ${textDecoration}">${highlightText(h.name, searchTerm)} ${iconDone}</div>
+                                        <div class="text-xs text-slate-500">${h.phone ? highlightText(h.phone, searchTerm) : ''}</div>
                                     </td>
-                                    <td class="px-4 py-3 hidden md:table-cell text-slate-500 text-xs">
-                                        ${h.proc || '-'}
-                                        ${h.delegate ? `<div class="mt-1 text-[10px] text-slate-400">Dr. ${h.delegate}</div>` : ''}
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide ${getBadgeColor(h.type)}">
-                                            ${h.type}
-                                        </span>
+                                    <td class="px-4 py-3 hidden md:table-cell text-xs text-slate-500">
+                                        ${highlightText(h.proc || 'S/N', searchTerm)}
+                                        ${h.delegate ? `<div class="mt-1 text-slate-400">${highlightText(h.delegate, searchTerm)}</div>` : ''}
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <button onclick="editHearing('${h.id}')" class="text-indigo-600 hover:bg-indigo-50 p-2 rounded transition-colors" title="Editar"><i class="fas fa-edit"></i></button>
-                                        <button onclick="deleteHearing('${h.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded transition-colors" title="Excluir"><i class="fas fa-trash"></i></button>
+                                        <button onclick="editHearing('${h.id}')" class="text-indigo-600 p-2 hover:bg-indigo-50 rounded"><i class="fas fa-edit"></i></button>
+                                        <button onclick="deleteHearing('${h.id}')" class="text-red-500 p-2 hover:bg-red-50 rounded"><i class="fas fa-trash"></i></button>
                                     </td>
-                                </div>
-                            `).join('')}
+                                </tr>
+                                `;
+                            }).join('')}
                         </tbody>
                     </table>
                 </div>
@@ -508,41 +621,23 @@ function renderHearingsPage(dataset = null) {
     });
 }
 
-// Atualiza o card de "Oitivas de Hoje" no Dashboard
-function updateTodayStats() {
-    const todayDiv = document.getElementById('today-hearings');
-    if (!todayDiv) return;
-
-    const hoje = new Date().toISOString().split('T')[0];
-    const todayHearings = hearings.filter(h => h.date === hoje).sort((a,b) => a.time.localeCompare(b.time));
-
-    if (todayHearings.length === 0) {
-        todayDiv.innerHTML = '<p class="text-slate-400 text-sm italic py-2">Nenhuma oitiva para hoje.</p>';
-    } else {
-        todayDiv.innerHTML = todayHearings.map(h => `
-            <div class="flex items-center justify-between p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-                <div class="flex items-center gap-3">
-                    <div class="bg-white p-2 rounded text-indigo-600 font-bold text-xs shadow-sm">
-                        ${h.time}
-                    </div>
-                    <div>
-                        <div class="font-bold text-slate-800 text-sm">${h.name}</div>
-                        <div class="text-xs text-slate-500">${h.type} • ${h.mode || 'Presencial'}</div>
-                    </div>
-                </div>
-                <button onclick="editHearing('${h.id}')" class="text-indigo-400 hover:text-indigo-700"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-        `).join('');
-    }
-}
-
-// --- OPERAÇÕES CRUD (SALVAR/EDITAR/EXCLUIR) ---
+// =======================================================
+// 8. AÇÕES CRUD (SALVAR, EDITAR, EXCLUIR)
+// =======================================================
 const formHearing = document.getElementById('form-hearing');
-if (formHearing) {
+if(formHearing) {
     formHearing.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // Coleta dados
+        // Verifica se tem unidade selecionada
+        if (!currentUnit) {
+            showToast('Nenhuma unidade selecionada!', 'error');
+            return;
+        }
+        
+        const id = document.getElementById('h-id').value;
+        const checkStatus = document.getElementById('h-status'); 
+        
         const data = {
             name: document.getElementById('h-name').value,
             phone: document.getElementById('h-phone').value,
@@ -554,55 +649,72 @@ if (formHearing) {
             delegate: document.getElementById('h-delegate').value,
             agent: document.getElementById('h-agent').value,
             obs: document.getElementById('h-obs').value,
+            status: checkStatus && checkStatus.checked ? 'realizada' : 'pendente', 
+            unit: currentUserEmail, // Salva qual unidade criou
             updatedAt: new Date().toISOString()
         };
-        
-        const id = document.getElementById('h-id').value;
+
         const btn = formHearing.querySelector('button[type="submit"]');
-        const originalText = btn.innerHTML;
+        const oldText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        btn.disabled = true;
 
         try {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-            btn.disabled = true;
-
             if (id) {
-                await getTenantRef(`hearings/${id}`).update(data);
-                showToast('Atualizado com sucesso!', 'success');
+                // Atualiza existente
+                await getUnitRef(`hearings/${id}`).update(data);
             } else {
+                // Novo registro
                 data.createdAt = new Date().toISOString();
-                await getTenantRef('hearings').push(data);
-                showToast('Agendamento criado!', 'success');
+                data.createdBy = currentUserEmail;
+                await getUnitRef('hearings').push(data);
             }
             
+            showToast('Salvo com sucesso!', 'success');
             closeModal('modal-hearing');
             
-            // Recarrega dados e atualiza UI
+            // Recarrega os dados
             await loadHearings();
             renderHearingsPage();
             renderCalendar();
-            updateTodayStats();
             
         } catch (error) {
             console.error(error);
             showToast('Erro ao salvar.', 'error');
         } finally {
-            btn.innerHTML = originalText;
+            btn.innerHTML = oldText;
             btn.disabled = false;
         }
     });
 }
 
-// --- MODAIS E UTILITÁRIOS ---
+// DECLARAMOS NO WINDOW PARA GARANTIR QUE O HTML ENCONTRE AS FUNÇÕES
 window.openNewHearingModal = function(dateStr) {
     const form = document.getElementById('form-hearing');
     if(form) form.reset();
-    
     document.getElementById('h-id').value = '';
     
-    // Se veio uma data do clique no calendário, preenche
-    if (dateStr) document.getElementById('h-date').value = dateStr;
+    const checkStatus = document.getElementById('h-status');
+    if(checkStatus) checkStatus.checked = false;
+
+    if(dateStr && typeof dateStr === 'string') {
+        document.getElementById('h-date').value = dateStr;
+        console.log('Data definida no modal:', dateStr);
+    } else {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        document.getElementById('h-date').value = `${year}-${month}-${day}`;
+    }
     
-    toggleModal('modal-hearing', true);
+    document.getElementById('h-time').value = '10:00';
+    
+    const m = document.getElementById('modal-hearing');
+    if(m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+    }
 }
 
 window.editHearing = function(id) {
@@ -620,106 +732,69 @@ window.editHearing = function(id) {
     document.getElementById('h-delegate').value = h.delegate || '';
     document.getElementById('h-agent').value = h.agent || '';
     document.getElementById('h-obs').value = h.obs || '';
+    
+    const checkStatus = document.getElementById('h-status');
+    if(checkStatus) checkStatus.checked = (h.status === 'realizada');
 
-    toggleModal('modal-hearing', true);
+    const m = document.getElementById('modal-hearing');
+    if(m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+    }
 }
 
 window.deleteHearing = async function(id) {
-    if(confirm('Tem certeza que deseja excluir este agendamento?')) {
+    if(confirm('Tem certeza que deseja excluir?')) {
         try {
-            await getTenantRef(`hearings/${id}`).remove();
-            showToast('Excluído com sucesso.', 'success');
+            await getUnitRef(`hearings/${id}`).remove();
+            showToast('Registro excluído.', 'success');
             await loadHearings();
             renderHearingsPage();
             renderCalendar();
-            updateTodayStats();
-        } catch (e) {
-            console.error(e);
-            showToast('Erro ao excluir.', 'error');
+        } catch(e) { 
+            showToast('Erro ao excluir', 'error'); 
         }
     }
 }
 
 window.closeModal = function(id) {
-    toggleModal(id, false);
-}
-
-function toggleModal(id, show) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    
-    if (show) {
-        el.classList.remove('hidden');
-        el.classList.add('flex');
-    } else {
-        el.classList.add('hidden');
-        el.classList.remove('flex');
+    const m = document.getElementById(id);
+    if(m) { 
+        m.classList.add('hidden'); 
+        m.classList.remove('flex'); 
     }
 }
 
-// --- HELPERS E FIREBASE ---
-function getTenantRef(path) {
-    if (!currentTenant) throw new Error("Usuário não autenticado.");
-    // Caminho no DB: tenants/{UserID}/{path}
-    return db.ref(`tenants/${currentTenant}/${path}`);
-}
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
-    const toast = document.createElement('div');
+function showToast(msg, type = 'info') {
+    const c = document.getElementById('toast-container');
+    if(!c) return alert(msg);
+    const t = document.createElement('div');
+    let color = 'bg-slate-800';
+    if(type === 'success') color = 'bg-emerald-600';
+    if(type === 'error') color = 'bg-rose-600';
     
-    // Classes Tailwind para cores
-    let colors = 'bg-slate-800 text-white';
-    if (type === 'success') colors = 'bg-emerald-600 text-white';
-    if (type === 'error') colors = 'bg-rose-600 text-white';
-    if (type === 'warning') colors = 'bg-amber-500 text-white';
-
-    toast.className = `${colors} px-6 py-3 rounded-lg shadow-xl mb-3 flex items-center gap-3 animate-fade-in transform transition-all`;
-    toast.innerHTML = `
-        <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
-        <span class="font-medium">${message}</span>
-    `;
-
-    container.appendChild(toast);
-
-    // Remove após 3s
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(-10px)';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    t.className = `${color} text-white px-6 py-3 rounded-lg shadow-lg mb-3 animate-fade-in`;
+    t.innerText = msg;
+    c.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
 }
 
-// Controle de Telas (Login vs App)
 function showLoginScreen(show) {
-    const loginEl = document.getElementById('login-screen');
-    const appEl = document.getElementById('app-content');
-    
-    if (show) {
-        if(loginEl) loginEl.classList.remove('hidden');
-        if(appEl) appEl.classList.add('hidden');
+    const l = document.getElementById('login-screen');
+    const a = document.getElementById('app-content');
+    if(show) {
+        if(l) l.classList.remove('hidden');
+        if(a) a.classList.add('hidden');
     } else {
-        if(loginEl) loginEl.classList.add('hidden');
-        if(appEl) appEl.classList.remove('hidden');
-        
-        // Garante que o dashboard e relatórios estão visíveis
-        const dashView = document.getElementById('dashboard-view');
-        const reportView = document.getElementById('hearings-view');
-        if(dashView) dashView.classList.remove('hidden');
-        // Report view pode começar oculto ou visível, conforme sua preferência
-        if(reportView) reportView.classList.remove('hidden'); 
+        if(l) l.classList.add('hidden');
+        if(a) a.classList.remove('hidden');
     }
 }
 
-// Helper para cores das badges
-function getBadgeColor(type) {
-    const colors = {
-        'Investigado': 'bg-rose-100 text-rose-700',
-        'Vítima': 'bg-amber-100 text-amber-700',
-        'Testemunha': 'bg-sky-100 text-sky-700',
-        'Denunciante': 'bg-emerald-100 text-emerald-700'
-    };
-    return colors[type] || 'bg-slate-100 text-slate-700';
-}
+// Exporta funções para o HTML
+window.closePopover = closePopover;
+window.calendar = {
+    prev: () => calendar?.prev(),
+    today: () => calendar?.today(),
+    next: () => calendar?.next()
+};

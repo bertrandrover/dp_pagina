@@ -1,20 +1,22 @@
 // CONFIGURAÇÃO DO FIREBASE PARA OITIVASPRO
-// Substitua pelos seus dados do Firebase
 const firebaseConfig = {
 
-  apiKey: "AIzaSyAvtBvVv3iLh_UodLYkIcCdjm8X0FKtFz8",
+  apiKey: "AIzaSyB-Wd8wlddqJa22HCjGLL519OewMiyBeJw",
 
-  authDomain: "witnesses-oitivas.firebaseapp.com",
+  authDomain: "controle-oitivas.firebaseapp.com",
 
-  projectId: "witnesses-oitivas",
+  databaseURL: "https://controle-oitivas-default-rtdb.firebaseio.com",
 
-  storageBucket: "witnesses-oitivas.firebasestorage.app",
+  projectId: "controle-oitivas",
 
-  messagingSenderId: "976838399282",
+  storageBucket: "controle-oitivas.firebasestorage.app",
 
-  appId: "1:976838399282:web:aa648e9e250c27c64a332b"
+  messagingSenderId: "954316081856",
+
+  appId: "1:954316081856:web:13397af9a093207d84fb25"
 
 };
+
 
 
 // Inicializar Firebase
@@ -24,15 +26,32 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 
-// Configuração multi-tenant
-let currentTenant = null;
-let tenants = [];
+// Variável para armazenar o identificador da unidade (email)
+let currentUnit = null;
 
-// Função para obter referência do tenant atual
-function getTenantRef(path = '') {
-    if (!currentTenant && currentTenant !== 'admin') {
-        console.error('Nenhum tenant selecionado');
-        return null;
+// Função para gerar um ID seguro a partir do email
+function getUnitIdFromEmail(email) {
+    if (!email) return null;
+    // Remove caracteres especiais e substitui . por _
+    return email.toLowerCase()
+                .replace(/[@.]/g, '_') // substitui @ e . por _
+                .replace(/[^a-z0-9_]/g, ''); // remove caracteres especiais
+}
+
+// Função para obter referência dos dados da unidade atual
+function getUnitRef(path = '') {
+    if (!currentUnit) {
+        console.error('Nenhuma unidade selecionada');
+        // Retorna uma referência nula (não vai salvar em lugar nenhum)
+        return { 
+            once: () => Promise.resolve({ exists: () => false, val: () => null }),
+            on: () => {},
+            off: () => {},
+            push: () => { console.warn('Tentativa de salvar sem unidade'); return null; },
+            update: () => Promise.reject('Sem unidade'),
+            remove: () => Promise.reject('Sem unidade')
+        };
     }
-    return db.ref(`tenants/${currentTenant}${path ? '/' + path : ''}`);
+    // Cada unidade tem seus dados separados por pasta com o nome do email (formatado)
+    return db.ref(`unidades/${currentUnit}${path ? '/' + path : ''}`);
 }
