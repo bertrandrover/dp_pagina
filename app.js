@@ -134,15 +134,16 @@ function updateUnitHeader() {
 }
 
 function addLogoutButton() {
-    const header = document.querySelector('.bg-indigo-900 .flex');
-    if (header && !document.getElementById('logout-btn-header')) {
+    const container = document.getElementById('logout-button-container');
+    if (container && !document.getElementById('logout-btn-header')) {
         const logoutBtn = document.createElement('button');
         logoutBtn.id = 'logout-btn-header';
         logoutBtn.onclick = logout;
-        logoutBtn.className = 'ml-auto flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold py-2 px-4 rounded-xl transition-all';
-        logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Sair';
+        logoutBtn.className = 'flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold py-3 px-4 rounded-xl transition-all transform hover:scale-105';
+        logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> <span class="hidden md:inline">Sair</span>';
         
-        header.appendChild(logoutBtn);
+        container.appendChild(logoutBtn);
+        console.log('Botão de logout adicionado!');
     }
 }
 
